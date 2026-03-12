@@ -1,11 +1,13 @@
 import { Firestore } from '@google-cloud/firestore';
 import { Hono } from 'hono';
 import { WorkspaceStore } from '../data/firestore.js';
+import type { EventItem } from '../data/types.js';
 import { runDailyReminder } from '../reminders/daily.js';
 import { runWeeklyReminder } from '../reminders/weekly.js';
 import { GcsAuthStore } from '../whatsapp/auth-store.js';
 import { WhatsAppClient } from '../whatsapp/client.js';
 import { childLogger } from '../utils/logger.js';
+import { renderAdminPage } from './admin-page.js';
 import { renderApprovePage } from './approve-page.js';
 
 const log = childLogger('routes');
@@ -15,6 +17,7 @@ interface AppEnv {
   readonly apiKey: string;
   readonly waBucket: string;
   readonly defaultWorkspaceId: string;
+  readonly adminToken: string;
 }
 
 export function createRoutes(env: AppEnv): Hono {
@@ -168,18 +171,114 @@ export function createRoutes(env: AppEnv): Hono {
     }
   });
 
-  app.post('/rotation/skip', async (c) => {
-    const body = await c.req.json().catch(() => ({})) as { workspaceId?: string };
-    const workspaceId = (body as Record<string, unknown>)['workspaceId'] as string | undefined
-      ?? env.defaultWorkspaceId;
+
+  // --- Admin dashboard ---
+
+  app.get('/admin/:workspaceId', async (c) => {
+    const token = c.req.query('token') ?? '';
+    if (token !== env.adminToken) {
+      return c.text('No autorizado', 401);
+    }
+
+    const workspaceId = c.req.param('workspaceId');
+    const store = new WorkspaceStore(env.db, workspaceId);
+
+    try {
+      const today = new Date();
+      const nextWeek = new Date(today);
+      nextWeek.setDate(today.getDate() + 7);
+      const fromDate = today.toISOString().slice(0, 10);
+      const toDate = nextWeek.toISOString().slice(0, 10);
+
+      const [config, students, rotation, events] = await Promise.all([
+        store.getConfig(),
+        store.listStudents(),
+        store.getRotation(),
+        store.listEventsByDateRange(fromDate, toDate),
+      ]);
+
+      return c.html(renderAdminPage({ workspaceId, config, students, rotation, events, token }));
+    } catch (err) {
+      log.error({ err: String(err), workspaceId }, 'admin.load.failed');
+      return c.text('Error cargando datos: ' + String(err), 500);
+    }
+  });
+
+  app.post('/admin/:workspaceId/event', async (c) => {
+    const token = c.req.query('token') ?? '';
+    if (token !== env.adminToken) {
+      return c.json({ error: 'No autorizado' }, 401);
+    }
+
+    const workspaceId = c.req.param('workspaceId');
+    const body = await c.req.json() as {
+      date?: string;
+      type?: string;
+      description?: string;
+      items?: EventItem[];
+    };
+
+    if (!body.date || !body.description) {
+      return c.json({ error: 'date and description are required' }, 400);
+    }
 
     const store = new WorkspaceStore(env.db, workspaceId);
     try {
-      const result = await store.skipCurrentStudent();
-      log.info(result, 'rotation.skipped');
-      return c.json({ status: 'skipped', ...result });
+      const eventId = await store.addEvent({
+        date: body.date,
+        type: (body.type ?? 'info') as 'snack' | 'material' | 'activity' | 'info',
+        description: body.description,
+        items: body.items ?? [],
+      });
+      log.info({ eventId, workspaceId }, 'admin.event.added');
+      return c.json({ status: 'added', eventId });
     } catch (err) {
-      log.error({ err: String(err) }, 'rotation.skip.failed');
+      log.error({ err: String(err) }, 'admin.event.add.failed');
+      return c.json({ error: String(err) }, 500);
+    }
+  });
+
+  app.post('/admin/:workspaceId/event/:eventId/assign', async (c) => {
+    const token = c.req.query('token') ?? '';
+    if (token !== env.adminToken) {
+      return c.json({ error: 'No autorizado' }, 401);
+    }
+
+    const workspaceId = c.req.param('workspaceId');
+    const eventId = c.req.param('eventId');
+    const store = new WorkspaceStore(env.db, workspaceId);
+
+    try {
+      const event = await store.assignStudentsToEvent(eventId);
+      log.info({ eventId, workspaceId, items: event.items.length }, 'admin.event.assigned');
+      return c.json({ status: 'assigned', event });
+    } catch (err) {
+      log.error({ err: String(err), eventId }, 'admin.event.assign.failed');
+      return c.json({ error: String(err) }, 400);
+    }
+  });
+
+  app.post('/admin/:workspaceId/event/:eventId/replace', async (c) => {
+    const token = c.req.query('token') ?? '';
+    if (token !== env.adminToken) {
+      return c.json({ error: 'No autorizado' }, 401);
+    }
+
+    const workspaceId = c.req.param('workspaceId');
+    const eventId = c.req.param('eventId');
+    const body = await c.req.json() as { studentId?: string };
+
+    if (!body.studentId) {
+      return c.json({ error: 'studentId is required' }, 400);
+    }
+
+    const store = new WorkspaceStore(env.db, workspaceId);
+    try {
+      const result = await store.replaceInEvent(eventId, body.studentId);
+      log.info({ eventId, studentId: body.studentId, replacementId: result.replacementId }, 'admin.event.replaced');
+      return c.json({ status: 'replaced', replacementId: result.replacementId, event: result.event });
+    } catch (err) {
+      log.error({ err: String(err), eventId }, 'admin.event.replace.failed');
       return c.json({ error: String(err) }, 400);
     }
   });

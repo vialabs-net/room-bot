@@ -59,10 +59,13 @@ function buildUserPrompt(ctx: ReminderContext): string {
   if (ctx.events.length > 0) {
     lines.push('', 'Eventos:');
     for (const ev of ctx.events) {
-      const assigned = ev.assignedTo
-        ? ` (asignado a: ${resolveStudentName(ev.assignedTo, ctx.students)})`
-        : '';
-      lines.push(`- ${ev.date} | ${ev.type} | ${ev.description}${assigned}`);
+      lines.push(`- ${ev.date} | ${ev.type} | ${ev.description}`);
+      for (const item of ev.items) {
+        const assignedName = item.assignedTo
+          ? resolveStudentName(item.assignedTo, ctx.students)
+          : 'sin asignar';
+        lines.push(`  * ${item.name}: ${assignedName}`);
+      }
     }
   }
 

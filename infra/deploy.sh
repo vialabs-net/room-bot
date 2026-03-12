@@ -20,7 +20,7 @@ gcloud run deploy "${SERVICE_NAME}" \
   --region="${REGION}" \
   --source=. \
   --service-account="${SA_EMAIL}" \
-  --set-env-vars="GCP_PROJECT_ID=${PROJECT_ID},WA_AUTH_BUCKET=${BUCKET_NAME},WORKSPACE_ID=pgma" \
+  --set-env-vars="GCP_PROJECT_ID=${PROJECT_ID},WA_AUTH_BUCKET=${BUCKET_NAME},WORKSPACE_ID=pgma,ADMIN_TOKEN=${ADMIN_TOKEN:?Set ADMIN_TOKEN env var before deploying}" \
   --set-secrets="ANTHROPIC_API_KEY=anthropic-api-key:latest" \
   --timeout=120 \
   --memory=512Mi \

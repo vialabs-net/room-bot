@@ -69,6 +69,7 @@ async function seedWorkspace(ws: SeedWorkspace): Promise<void> {
     type: ws.rotation.type,
     order: studentIds,
     currentIndex: 0,
+    deferred: [],
     weeklySlots: ws.rotation.weeklySlots,
   });
 

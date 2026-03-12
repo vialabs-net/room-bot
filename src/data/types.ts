@@ -13,17 +13,25 @@ export interface RotationConfig {
   readonly type: string;
   readonly order: readonly string[];
   readonly currentIndex: number;
+  readonly deferred: readonly string[];
   readonly weeklySlots: readonly string[];
 }
 
-export type EventType = 'snack' | 'material' | 'activity' | 'info';
+export type EventType = 'snack' | 'material' | 'activity' | 'info' | 'birthday';
+export type EventStatus = 'draft' | 'assigned' | 'sent';
+
+export interface EventItem {
+  readonly name: string;
+  readonly assignedTo?: string;
+}
 
 export interface ClassEvent {
   readonly id: string;
   readonly date: string;
   readonly description: string;
-  readonly assignedTo?: string;
   readonly type: EventType;
+  readonly items: readonly EventItem[];
+  readonly status: EventStatus;
 }
 
 export type DraftStatus = 'pending_approval' | 'approved' | 'sent' | 'expired';
