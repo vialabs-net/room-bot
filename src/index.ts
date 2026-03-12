@@ -20,6 +20,7 @@ const app = createRoutes({
   apiKey: env.ANTHROPIC_API_KEY,
   waBucket: env.WA_AUTH_BUCKET,
   defaultWorkspaceId: env.WORKSPACE_ID,
+  adminToken: env.ADMIN_TOKEN,
 });
 
 const port = Number(env.PORT);

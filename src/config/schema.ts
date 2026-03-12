@@ -50,6 +50,7 @@ export const EnvSchema = z.object({
   GCP_PROJECT_ID: z.string().min(1),
   WA_AUTH_BUCKET: z.string().min(1),
   WORKSPACE_ID: z.string().min(1),
+  ADMIN_TOKEN: z.string().min(1),
   PORT: z.string().default('8080'),
 });
 

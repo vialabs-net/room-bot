@@ -6,6 +6,7 @@ import { runWeeklyReminder } from '../reminders/weekly.js';
 import { GcsAuthStore } from '../whatsapp/auth-store.js';
 import { WhatsAppClient } from '../whatsapp/client.js';
 import { childLogger } from '../utils/logger.js';
+import { renderAdminPage } from './admin-page.js';
 import { renderApprovePage } from './approve-page.js';
 
 const log = childLogger('routes');
@@ -15,6 +16,7 @@ interface AppEnv {
   readonly apiKey: string;
   readonly waBucket: string;
   readonly defaultWorkspaceId: string;
+  readonly adminToken: string;
 }
 
 export function createRoutes(env: AppEnv): Hono {
@@ -181,6 +183,70 @@ export function createRoutes(env: AppEnv): Hono {
     } catch (err) {
       log.error({ err: String(err) }, 'rotation.skip.failed');
       return c.json({ error: String(err) }, 400);
+    }
+  });
+
+  // --- Admin dashboard ---
+
+  app.get('/admin/:workspaceId', async (c) => {
+    const token = c.req.query('token') ?? '';
+    if (token !== env.adminToken) {
+      return c.text('No autorizado', 401);
+    }
+
+    const workspaceId = c.req.param('workspaceId');
+    const store = new WorkspaceStore(env.db, workspaceId);
+
+    try {
+      const today = new Date();
+      const nextWeek = new Date(today);
+      nextWeek.setDate(today.getDate() + 7);
+      const fromDate = today.toISOString().slice(0, 10);
+      const toDate = nextWeek.toISOString().slice(0, 10);
+
+      const [config, students, rotation, events] = await Promise.all([
+        store.getConfig(),
+        store.listStudents(),
+        store.getRotation(),
+        store.listEventsByDateRange(fromDate, toDate),
+      ]);
+
+      return c.html(renderAdminPage({ workspaceId, config, students, rotation, events, token }));
+    } catch (err) {
+      log.error({ err: String(err), workspaceId }, 'admin.load.failed');
+      return c.text('Error cargando datos: ' + String(err), 500);
+    }
+  });
+
+  app.post('/admin/:workspaceId/event', async (c) => {
+    const token = c.req.query('token') ?? '';
+    if (token !== env.adminToken) {
+      return c.json({ error: 'No autorizado' }, 401);
+    }
+
+    const workspaceId = c.req.param('workspaceId');
+    const body = await c.req.json() as {
+      date?: string;
+      type?: string;
+      description?: string;
+    };
+
+    if (!body.date || !body.description) {
+      return c.json({ error: 'date and description are required' }, 400);
+    }
+
+    const store = new WorkspaceStore(env.db, workspaceId);
+    try {
+      const eventId = await store.addEvent({
+        date: body.date,
+        type: (body.type ?? 'info') as 'snack' | 'material' | 'activity' | 'info',
+        description: body.description,
+      });
+      log.info({ eventId, workspaceId }, 'admin.event.added');
+      return c.json({ status: 'added', eventId });
+    } catch (err) {
+      log.error({ err: String(err) }, 'admin.event.add.failed');
+      return c.json({ error: String(err) }, 500);
     }
   });
 
