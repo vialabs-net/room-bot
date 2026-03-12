@@ -1,0 +1,22 @@
+[
+  {
+    "messageType": "volunteer_call",
+    "content": "Your real volunteer call message here. Include emojis and your natural writing style."
+  },
+  {
+    "messageType": "sharing_snack",
+    "content": "Your real sharing snack message here. Include the student list and item list format you use."
+  },
+  {
+    "messageType": "event_invitation",
+    "content": "Your real event invitation message here. Include date, time, location details."
+  },
+  {
+    "messageType": "jeans_day",
+    "content": "Your real jeans day or simple announcement message here."
+  },
+  {
+    "messageType": "fiestas_patrias",
+    "content": "Your real celebration/themed snack message here."
+  }
+]

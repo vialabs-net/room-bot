@@ -1,0 +1,44 @@
+[
+  {
+    "id": "pgma",
+    "config": {
+      "groupJid": "",
+      "timezone": "America/Santiago",
+      "schoolName": "Colegio",
+      "className": "PG Mayor A",
+      "testMode": {
+        "enabled": true,
+        "recipientPhone": "+56900000000"
+      }
+    },
+    "students": [
+      { "name": "Apellido Nombre Estudiante1" },
+      { "name": "Apellido Nombre Estudiante2" }
+    ],
+    "rotation": {
+      "type": "snack",
+      "weeklySlots": ["lunes", "miercoles", "viernes"]
+    }
+  },
+  {
+    "id": "pka",
+    "config": {
+      "groupJid": "",
+      "timezone": "America/Santiago",
+      "schoolName": "Colegio",
+      "className": "PK A",
+      "testMode": {
+        "enabled": true,
+        "recipientPhone": "+56900000000"
+      }
+    },
+    "students": [
+      { "name": "Apellido Nombre Estudiante1" },
+      { "name": "Apellido Nombre Estudiante2" }
+    ],
+    "rotation": {
+      "type": "snack",
+      "weeklySlots": ["lunes", "miercoles", "viernes"]
+    }
+  }
+]

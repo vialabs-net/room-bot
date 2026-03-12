@@ -1,0 +1,37 @@
+{
+  "name": "room-bot",
+  "version": "0.1.0",
+  "description": "WhatsApp reminder bot for classroom room mothers",
+  "type": "module",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "tsx --env-file=.env.local src/index.ts",
+    "wa-login": "tsx --env-file=.env.local scripts/wa-login.ts",
+    "seed-students": "tsx --env-file=.env.local scripts/seed-students.ts",
+    "seed-voice": "tsx --env-file=.env.local scripts/seed-voice.ts",
+    "send-test": "tsx --env-file=.env.local scripts/send-test.ts"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.39.0",
+    "@google-cloud/firestore": "^7.11.0",
+    "@google-cloud/storage": "^7.15.0",
+    "@hono/node-server": "^1.13.8",
+    "@whiskeysockets/baileys": "7.0.0-rc.9",
+    "date-fns": "^4.1.0",
+    "date-fns-tz": "^3.2.0",
+    "hono": "^4.7.0",
+    "pino": "^9.6.0",
+    "qrcode-terminal": "^0.12.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.0.0"
+  }
+}

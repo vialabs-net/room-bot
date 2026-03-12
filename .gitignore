@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.env.local
+*.local
+/data/*
+!/data/*.example.json
+wa-auth/
