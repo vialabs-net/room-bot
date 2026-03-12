@@ -1,6 +1,7 @@
 import { Firestore } from '@google-cloud/firestore';
 import { Hono } from 'hono';
 import { WorkspaceStore } from '../data/firestore.js';
+import type { EventItem } from '../data/types.js';
 import { runDailyReminder } from '../reminders/daily.js';
 import { runWeeklyReminder } from '../reminders/weekly.js';
 import { GcsAuthStore } from '../whatsapp/auth-store.js';
@@ -170,21 +171,6 @@ export function createRoutes(env: AppEnv): Hono {
     }
   });
 
-  app.post('/rotation/skip', async (c) => {
-    const body = await c.req.json().catch(() => ({})) as { workspaceId?: string };
-    const workspaceId = (body as Record<string, unknown>)['workspaceId'] as string | undefined
-      ?? env.defaultWorkspaceId;
-
-    const store = new WorkspaceStore(env.db, workspaceId);
-    try {
-      const result = await store.skipCurrentStudent();
-      log.info(result, 'rotation.skipped');
-      return c.json({ status: 'skipped', ...result });
-    } catch (err) {
-      log.error({ err: String(err) }, 'rotation.skip.failed');
-      return c.json({ error: String(err) }, 400);
-    }
-  });
 
   // --- Admin dashboard ---
 
@@ -229,6 +215,7 @@ export function createRoutes(env: AppEnv): Hono {
       date?: string;
       type?: string;
       description?: string;
+      items?: EventItem[];
     };
 
     if (!body.date || !body.description) {
@@ -241,12 +228,58 @@ export function createRoutes(env: AppEnv): Hono {
         date: body.date,
         type: (body.type ?? 'info') as 'snack' | 'material' | 'activity' | 'info',
         description: body.description,
+        items: body.items ?? [],
       });
       log.info({ eventId, workspaceId }, 'admin.event.added');
       return c.json({ status: 'added', eventId });
     } catch (err) {
       log.error({ err: String(err) }, 'admin.event.add.failed');
       return c.json({ error: String(err) }, 500);
+    }
+  });
+
+  app.post('/admin/:workspaceId/event/:eventId/assign', async (c) => {
+    const token = c.req.query('token') ?? '';
+    if (token !== env.adminToken) {
+      return c.json({ error: 'No autorizado' }, 401);
+    }
+
+    const workspaceId = c.req.param('workspaceId');
+    const eventId = c.req.param('eventId');
+    const store = new WorkspaceStore(env.db, workspaceId);
+
+    try {
+      const event = await store.assignStudentsToEvent(eventId);
+      log.info({ eventId, workspaceId, items: event.items.length }, 'admin.event.assigned');
+      return c.json({ status: 'assigned', event });
+    } catch (err) {
+      log.error({ err: String(err), eventId }, 'admin.event.assign.failed');
+      return c.json({ error: String(err) }, 400);
+    }
+  });
+
+  app.post('/admin/:workspaceId/event/:eventId/replace', async (c) => {
+    const token = c.req.query('token') ?? '';
+    if (token !== env.adminToken) {
+      return c.json({ error: 'No autorizado' }, 401);
+    }
+
+    const workspaceId = c.req.param('workspaceId');
+    const eventId = c.req.param('eventId');
+    const body = await c.req.json() as { studentId?: string };
+
+    if (!body.studentId) {
+      return c.json({ error: 'studentId is required' }, 400);
+    }
+
+    const store = new WorkspaceStore(env.db, workspaceId);
+    try {
+      const result = await store.replaceInEvent(eventId, body.studentId);
+      log.info({ eventId, studentId: body.studentId, replacementId: result.replacementId }, 'admin.event.replaced');
+      return c.json({ status: 'replaced', replacementId: result.replacementId, event: result.event });
+    } catch (err) {
+      log.error({ err: String(err), eventId }, 'admin.event.replace.failed');
+      return c.json({ error: String(err) }, 400);
     }
   });
 

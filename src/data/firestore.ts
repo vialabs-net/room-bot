@@ -3,6 +3,9 @@ import type {
   ClassEvent,
   Draft,
   DraftStatus,
+  EventItem,
+  EventStatus,
+  EventType,
   ReminderType,
   RotationConfig,
   Student,
@@ -53,20 +56,14 @@ export class WorkspaceStore {
     if (!doc.exists) {
       throw new Error(`Rotation config not found: ${this.workspaceId}`);
     }
-    return doc.data() as RotationConfig;
-  }
-
-  async advanceRotation(steps: number): Promise<number> {
-    const ref = this.db.doc(`workspaces/${this.workspaceId}/rotation/config`);
-    const newIndex = await this.db.runTransaction(async (tx) => {
-      const doc = await tx.get(ref);
-      if (!doc.exists) throw new Error('Rotation config not found');
-      const data = doc.data() as RotationConfig;
-      const next = (data.currentIndex + steps) % data.order.length;
-      tx.update(ref, { currentIndex: next });
-      return next;
-    });
-    return newIndex;
+    const data = doc.data()!;
+    return {
+      type: data['type'] as string,
+      order: data['order'] as string[],
+      currentIndex: data['currentIndex'] as number,
+      deferred: (data['deferred'] as string[] | undefined) ?? [],
+      weeklySlots: data['weeklySlots'] as string[],
+    };
   }
 
   async swapStudents(idA: string, idB: string): Promise<readonly string[]> {
@@ -88,23 +85,116 @@ export class WorkspaceStore {
     return newOrder;
   }
 
-  async skipCurrentStudent(): Promise<{ skippedId: string; newIndex: number }> {
-    const ref = this.db.doc(`workspaces/${this.workspaceId}/rotation/config`);
+  async assignStudentsToEvent(eventId: string): Promise<ClassEvent> {
+    const rotRef = this.db.doc(`workspaces/${this.workspaceId}/rotation/config`);
+    const eventRef = this.col('events').doc(eventId);
+
     return this.db.runTransaction(async (tx) => {
-      const doc = await tx.get(ref);
-      if (!doc.exists) throw new Error('Rotation config not found');
-      const data = doc.data() as RotationConfig;
-      const order = [...data.order];
-      const skippedId = order[data.currentIndex];
-      if (!skippedId) throw new Error('No student at current index');
-      order.splice(data.currentIndex, 1);
-      order.push(skippedId);
-      tx.update(ref, { order, currentIndex: data.currentIndex % order.length });
-      return { skippedId, newIndex: data.currentIndex % order.length };
+      const [rotDoc, eventDoc] = await Promise.all([tx.get(rotRef), tx.get(eventRef)]);
+      if (!rotDoc.exists) throw new Error('Rotation config not found');
+      if (!eventDoc.exists) throw new Error('Event not found');
+
+      const rot = rotDoc.data()!;
+      const event = eventDoc.data()!;
+      const items = (event['items'] as EventItem[]) ?? [];
+
+      if (items.length === 0) throw new Error('Event has no items to assign');
+
+      const order = rot['order'] as string[];
+      const deferred = [...((rot['deferred'] as string[] | undefined) ?? [])];
+      let currentIndex = rot['currentIndex'] as number;
+      const assigned: EventItem[] = [];
+      const usedFromDeferred: string[] = [];
+
+      for (const item of items) {
+        let studentId: string | undefined;
+
+        if (deferred.length > 0) {
+          studentId = deferred.shift()!;
+          usedFromDeferred.push(studentId);
+        } else {
+          studentId = order[currentIndex % order.length];
+          currentIndex = (currentIndex + 1) % order.length;
+        }
+
+        assigned.push({ name: item.name, assignedTo: studentId });
+      }
+
+      tx.update(rotRef, {
+        currentIndex,
+        deferred: deferred.filter((d) => !usedFromDeferred.includes(d)),
+      });
+      tx.update(eventRef, { items: assigned, status: 'assigned' as EventStatus });
+
+      return {
+        id: eventId,
+        date: event['date'] as string,
+        description: event['description'] as string,
+        type: event['type'] as EventType,
+        items: assigned,
+        status: 'assigned' as EventStatus,
+      };
+    });
+  }
+
+  async replaceInEvent(eventId: string, sickStudentId: string): Promise<{ replacementId: string; event: ClassEvent }> {
+    const rotRef = this.db.doc(`workspaces/${this.workspaceId}/rotation/config`);
+    const eventRef = this.col('events').doc(eventId);
+
+    return this.db.runTransaction(async (tx) => {
+      const [rotDoc, eventDoc] = await Promise.all([tx.get(rotRef), tx.get(eventRef)]);
+      if (!rotDoc.exists) throw new Error('Rotation config not found');
+      if (!eventDoc.exists) throw new Error('Event not found');
+
+      const rot = rotDoc.data()!;
+      const event = eventDoc.data()!;
+      const items = [...((event['items'] as EventItem[]) ?? [])];
+
+      const sickItemIndex = items.findIndex((item) => item.assignedTo === sickStudentId);
+      if (sickItemIndex === -1) throw new Error('Student not assigned to this event');
+
+      const order = rot['order'] as string[];
+      const deferred = [...((rot['deferred'] as string[] | undefined) ?? [])];
+      let currentIndex = rot['currentIndex'] as number;
+
+      const replacementId = order[currentIndex % order.length]!;
+      currentIndex = (currentIndex + 1) % order.length;
+
+      items[sickItemIndex] = { name: items[sickItemIndex]!.name, assignedTo: replacementId };
+
+      deferred.push(sickStudentId);
+
+      tx.update(rotRef, { currentIndex, deferred });
+      tx.update(eventRef, { items });
+
+      const updatedEvent: ClassEvent = {
+        id: eventId,
+        date: event['date'] as string,
+        description: event['description'] as string,
+        type: event['type'] as EventType,
+        items,
+        status: event['status'] as EventStatus,
+      };
+
+      return { replacementId, event: updatedEvent };
     });
   }
 
   // --- Events ---
+
+  async getEvent(id: string): Promise<ClassEvent | null> {
+    const doc = await this.col('events').doc(id).get();
+    if (!doc.exists) return null;
+    const data = doc.data()!;
+    return {
+      id: doc.id,
+      date: data['date'] as string,
+      description: data['description'] as string,
+      type: (data['type'] as EventType) ?? 'info',
+      items: (data['items'] as EventItem[]) ?? [],
+      status: (data['status'] as EventStatus) ?? 'draft',
+    };
+  }
 
   async listEventsByDateRange(from: string, to: string): Promise<ClassEvent[]> {
     const snap = await this.col('events')
@@ -112,12 +202,29 @@ export class WorkspaceStore {
       .where('date', '<=', to)
       .orderBy('date')
       .get();
-    return snap.docs.map((d) => ({ id: d.id, ...d.data() }) as ClassEvent);
+    return snap.docs.map((d) => {
+      const data = d.data();
+      return {
+        id: d.id,
+        date: data['date'] as string,
+        description: data['description'] as string,
+        type: (data['type'] as EventType) ?? 'info',
+        items: (data['items'] as EventItem[]) ?? [],
+        status: (data['status'] as EventStatus) ?? 'draft',
+      };
+    });
   }
 
-  async addEvent(event: Omit<ClassEvent, 'id'>): Promise<string> {
-    const ref = await this.col('events').add(event);
+  async addEvent(event: { date: string; description: string; type: EventType; items: EventItem[] }): Promise<string> {
+    const ref = await this.col('events').add({
+      ...event,
+      status: 'draft' as EventStatus,
+    });
     return ref.id;
+  }
+
+  async updateEventStatus(id: string, status: EventStatus): Promise<void> {
+    await this.col('events').doc(id).update({ status });
   }
 
   // --- Drafts ---
