@@ -3,6 +3,7 @@ import { toZonedTime } from 'date-fns-tz';
 import type { ReminderContext } from '../ai/message-generator.js';
 import { generateReminder } from '../ai/message-generator.js';
 import type { WorkspaceStore } from '../data/firestore.js';
+import type { GmailScanner } from '../gmail/scanner.js';
 import type { WhatsAppClient } from '../whatsapp/client.js';
 import { childLogger } from '../utils/logger.js';
 
@@ -19,6 +20,7 @@ export async function runWeeklyReminder(
   store: WorkspaceStore,
   waClient: WhatsAppClient,
   apiKey: string,
+  gmailScanner?: GmailScanner,
 ): Promise<WeeklyResult> {
   const config = await store.getConfig();
   const tz = config.timezone;
@@ -31,11 +33,17 @@ export async function runWeeklyReminder(
 
   log.info({ from: fromStr, to: toStr }, 'weekly.generating');
 
-  const [events, rotation, students, voiceExamples] = await Promise.all([
+  const [events, rotation, students, voiceExamples, schoolEmails] = await Promise.all([
     store.listEventsByDateRange(fromStr, toStr),
     store.getRotation(),
     store.listStudents(),
     store.listVoiceExamples(),
+    gmailScanner
+      ? gmailScanner.fetchSchoolEmails(7).catch((err: unknown) => {
+          log.warn({ err: String(err) }, 'gmail.fetch.failed');
+          return [];
+        })
+      : Promise.resolve([]),
   ]);
 
   const ctx: ReminderContext = {
@@ -46,6 +54,7 @@ export async function runWeeklyReminder(
     voiceExamples,
     className: config.className,
     schoolName: config.schoolName,
+    schoolEmails,
   };
 
   const message = await generateReminder(apiKey, ctx);

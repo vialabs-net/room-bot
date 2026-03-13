@@ -21,6 +21,9 @@ const app = createRoutes({
   waBucket: env.WA_AUTH_BUCKET,
   defaultWorkspaceId: env.WORKSPACE_ID,
   adminToken: env.ADMIN_TOKEN,
+  gmailClientId: env.GMAIL_CLIENT_ID,
+  gmailClientSecret: env.GMAIL_CLIENT_SECRET,
+  gmailRefreshToken: env.GMAIL_REFRESH_TOKEN,
 });
 
 const port = Number(env.PORT);

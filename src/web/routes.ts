@@ -7,6 +7,7 @@ import { runWeeklyReminder } from '../reminders/weekly.js';
 import { GcsAuthStore } from '../whatsapp/auth-store.js';
 import { WhatsAppClient } from '../whatsapp/client.js';
 import { childLogger } from '../utils/logger.js';
+import { GmailScanner } from '../gmail/scanner.js';
 import { renderAdminPage } from './admin-page.js';
 import { renderApprovePage } from './approve-page.js';
 
@@ -18,10 +19,17 @@ interface AppEnv {
   readonly waBucket: string;
   readonly defaultWorkspaceId: string;
   readonly adminToken: string;
+  readonly gmailClientId?: string;
+  readonly gmailClientSecret?: string;
+  readonly gmailRefreshToken?: string;
 }
 
 export function createRoutes(env: AppEnv): Hono {
   const app = new Hono();
+
+  const gmailScanner = env.gmailClientId && env.gmailClientSecret && env.gmailRefreshToken
+    ? new GmailScanner(env.gmailClientId, env.gmailClientSecret, env.gmailRefreshToken)
+    : undefined;
 
   app.get('/health', (c) => c.json({ status: 'ok' }));
 
@@ -36,7 +44,7 @@ export function createRoutes(env: AppEnv): Hono {
 
     try {
       const result = reminderType === 'weekly'
-        ? await runWeeklyReminder(store, waClient, env.apiKey)
+        ? await runWeeklyReminder(store, waClient, env.apiKey, gmailScanner)
         : await runDailyReminder(store, waClient, env.apiKey);
 
       if (result.skipped) {

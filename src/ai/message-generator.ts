@@ -1,4 +1,5 @@
 import type { ClassEvent, RotationConfig, Student, VoiceExample } from '../data/types.js';
+import type { SchoolEmail } from '../gmail/scanner.js';
 import { generateMessage } from './client.js';
 
 export interface ReminderContext {
@@ -9,6 +10,7 @@ export interface ReminderContext {
   readonly voiceExamples: readonly VoiceExample[];
   readonly className: string;
   readonly schoolName: string;
+  readonly schoolEmails?: readonly SchoolEmail[];
 }
 
 export async function generateReminder(
@@ -56,6 +58,13 @@ function buildUserPrompt(ctx: ReminderContext): string {
 
   lines.push('', `Clase: ${ctx.className}, ${ctx.schoolName}`);
 
+  if (ctx.schoolEmails && ctx.schoolEmails.length > 0) {
+    lines.push('', 'Informativos del colegio (esta semana):');
+    for (const email of ctx.schoolEmails) {
+      lines.push('', `--- ${email.date} | ${email.subject} ---`, email.body);
+    }
+  }
+
   if (ctx.events.length > 0) {
     lines.push('', 'Eventos:');
     for (const ev of ctx.events) {
@@ -77,7 +86,11 @@ function buildUserPrompt(ctx: ReminderContext): string {
     }
   }
 
-  if (ctx.events.length === 0 && snackStudents.length === 0) {
+  const hasContent = ctx.events.length > 0
+    || snackStudents.length > 0
+    || (ctx.schoolEmails && ctx.schoolEmails.length > 0);
+
+  if (!hasContent) {
     lines.push('', 'No hay eventos ni colaciones programadas.');
   }
 
