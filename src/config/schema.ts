@@ -52,6 +52,9 @@ export const EnvSchema = z.object({
   WORKSPACE_ID: z.string().min(1),
   ADMIN_TOKEN: z.string().min(1),
   PORT: z.string().default('8080'),
+  GMAIL_CLIENT_ID: z.string().optional(),
+  GMAIL_CLIENT_SECRET: z.string().optional(),
+  GMAIL_REFRESH_TOKEN: z.string().optional(),
 });
 
 export type Env = z.infer<typeof EnvSchema>;

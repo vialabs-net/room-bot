@@ -14,10 +14,12 @@
     "wa-login": "tsx --env-file=.env.local scripts/wa-login.ts",
     "seed-students": "tsx --env-file=.env.local scripts/seed-students.ts",
     "seed-voice": "tsx --env-file=.env.local scripts/seed-voice.ts",
-    "send-test": "tsx --env-file=.env.local scripts/send-test.ts"
+    "send-test": "tsx --env-file=.env.local scripts/send-test.ts",
+    "gmail-auth": "tsx --env-file=.env.local scripts/gmail-auth.ts"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
+    "googleapis": "^144.0.0",
     "@google-cloud/firestore": "^7.11.0",
     "@google-cloud/storage": "^7.15.0",
     "@hono/node-server": "^1.13.8",

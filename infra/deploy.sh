@@ -21,7 +21,7 @@ gcloud run deploy "${SERVICE_NAME}" \
   --source=. \
   --service-account="${SA_EMAIL}" \
   --set-env-vars="GCP_PROJECT_ID=${PROJECT_ID},WA_AUTH_BUCKET=${BUCKET_NAME},WORKSPACE_ID=pgma,ADMIN_TOKEN=${ADMIN_TOKEN:?Set ADMIN_TOKEN env var before deploying}" \
-  --set-secrets="ANTHROPIC_API_KEY=anthropic-api-key:latest" \
+  --set-secrets="ANTHROPIC_API_KEY=anthropic-api-key:latest,GMAIL_CLIENT_ID=gmail-client-id:latest,GMAIL_CLIENT_SECRET=gmail-client-secret:latest,GMAIL_REFRESH_TOKEN=gmail-refresh-token:latest" \
   --timeout=120 \
   --memory=512Mi \
   --cpu=1 \
