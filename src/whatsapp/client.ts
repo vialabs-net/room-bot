@@ -65,37 +65,55 @@ export class WhatsAppClient {
     this.saveCreds = saveCreds;
 
     const { version } = await fetchLatestBaileysVersion();
-    const baileysLogger = pino({ level: 'silent' });
+    log.info({ version }, 'wa.version');
 
-    this.socket = makeWASocket({
-      auth: {
-        creds: state.creds,
-        keys: makeCacheableSignalKeyStore(state.keys, baileysLogger),
-      },
-      version,
-      logger: baileysLogger,
-      printQRInTerminal: false,
-      browser: ['room-bot', 'cli', '0.1.0'],
-      syncFullHistory: false,
-      markOnlineOnConnect: false,
-    });
+    for (let attempt = 1; attempt <= 3; attempt++) {
+      const baileysLogger = pino({ level: 'silent' });
 
-    this.socket.ev.on('creds.update', async () => {
+      this.socket = makeWASocket({
+        auth: {
+          creds: state.creds,
+          keys: makeCacheableSignalKeyStore(state.keys, baileysLogger),
+        },
+        version,
+        logger: baileysLogger,
+        printQRInTerminal: false,
+        browser: ['room-bot', 'cli', '0.1.0'],
+        syncFullHistory: false,
+        markOnlineOnConnect: false,
+      });
+
+      this.socket.ev.on('creds.update', async () => {
+        try {
+          await this.saveCreds?.();
+        } catch (err) {
+          log.warn({ err: String(err) }, 'wa.creds.save.failed');
+        }
+      });
+
+      this.socket.ev.on('connection.update', (update) => {
+        log.info({ connection: update.connection, qr: !!update.qr, statusCode: getStatusCode(update.lastDisconnect?.error) }, 'wa.connection.update');
+        if (update.qr) {
+          onQr(update.qr);
+        }
+      });
+
       try {
-        await this.saveCreds?.();
+        await this.waitForConnection();
+        log.info('wa.connected');
+        return;
       } catch (err) {
-        log.warn({ err: String(err) }, 'wa.creds.save.failed');
+        const msg = String(err);
+        if (msg.includes('515') && attempt < 3) {
+          log.warn({ attempt }, 'wa.restart_required.retrying');
+          this.socket.end(undefined);
+          this.socket = null;
+          await new Promise((r) => setTimeout(r, 2000));
+          continue;
+        }
+        throw err;
       }
-    });
-
-    this.socket.ev.on('connection.update', (update) => {
-      if (update.qr) {
-        onQr(update.qr);
-      }
-    });
-
-    await this.waitForConnection();
-    log.info('wa.connected');
+    }
   }
 
   async sendTextToGroup(groupJid: string, text: string): Promise<SendResult> {
