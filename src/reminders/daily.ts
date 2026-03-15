@@ -29,9 +29,8 @@ export async function runDailyReminder(
 
   log.info({ date: tomorrowStr }, 'daily.generating');
 
-  const [events, rotation, students, voiceExamples] = await Promise.all([
+  const [events, students, voiceExamples] = await Promise.all([
     store.listEventsByDateRange(tomorrowStr, tomorrowStr),
-    store.getRotation(),
     store.listStudents(),
     store.listVoiceExamples(),
   ]);
@@ -39,7 +38,6 @@ export async function runDailyReminder(
   const ctx: ReminderContext = {
     reminderType: 'daily',
     events,
-    rotation,
     students,
     voiceExamples,
     className: config.className,
