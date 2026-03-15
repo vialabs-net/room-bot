@@ -1,16 +1,16 @@
-import type { ClassEvent, RotationConfig, Student, VoiceExample } from '../data/types.js';
+import type { ClassEvent, Student, VoiceExample } from '../data/types.js';
 import type { SchoolEmail } from '../gmail/scanner.js';
 import { generateMessage } from './client.js';
 
 export interface ReminderContext {
   readonly reminderType: 'daily' | 'weekly';
   readonly events: readonly ClassEvent[];
-  readonly rotation: RotationConfig;
   readonly students: readonly Student[];
   readonly voiceExamples: readonly VoiceExample[];
   readonly className: string;
   readonly schoolName: string;
   readonly schoolEmails?: readonly SchoolEmail[];
+  readonly weekRange?: string; // e.g. "2026-03-16 al 2026-03-20"
 }
 
 export async function generateReminder(
@@ -31,10 +31,11 @@ function buildSystemPrompt(voiceExamples: readonly VoiceExample[]): string {
     '- Escribe en espanol chileno, tono calido y cercano',
     '- Usa emojis con moderacion pero que den vida al mensaje',
     '- Nunca inventes informacion que no este en los datos proporcionados',
-    '- Si no hay eventos ni colaciones, responde SOLO con la palabra: SKIP',
+    '- Si no hay eventos ni avisos del colegio, responde SOLO con la palabra: SKIP',
     '- El mensaje debe ser completo y listo para enviar, sin placeholders',
     '- No incluyas saludos genericos innecesarios, ve al grano con calidez',
     '- Mantente concisa: los papas leen en el celular',
+    '- Separa claramente: "Actividades de la semana" (fechas dentro del rango semanal indicado) vs "Mirando mas adelante" (fechas posteriores al rango)',
   ];
 
   if (voiceExamples.length > 0) {
@@ -53,7 +54,8 @@ function buildUserPrompt(ctx: ReminderContext): string {
   if (ctx.reminderType === 'daily') {
     lines.push('Genera un mensaje de recordatorio para MANANA.');
   } else {
-    lines.push('Genera un resumen semanal con todo lo que viene esta semana.');
+    const rangeLabel = ctx.weekRange ? ` (semana del ${ctx.weekRange})` : '';
+    lines.push(`Genera un resumen semanal con todo lo que viene esta semana${rangeLabel}.`);
   }
 
   lines.push('', `Clase: ${ctx.className}, ${ctx.schoolName}`);
@@ -66,7 +68,10 @@ function buildUserPrompt(ctx: ReminderContext): string {
   }
 
   if (ctx.events.length > 0) {
-    lines.push('', 'Eventos:');
+    const eventsLabel = ctx.weekRange
+      ? `Eventos de esta semana (${ctx.weekRange}):`
+      : 'Eventos:';
+    lines.push('', eventsLabel);
     for (const ev of ctx.events) {
       lines.push(`- ${ev.date} | ${ev.type} | ${ev.description}`);
       for (const item of ev.items) {
@@ -78,53 +83,14 @@ function buildUserPrompt(ctx: ReminderContext): string {
     }
   }
 
-  const snackStudents = resolveSnackStudents(ctx);
-  if (snackStudents.length > 0) {
-    lines.push('', 'Colaciones (rotacion):');
-    for (const entry of snackStudents) {
-      lines.push(`- ${entry.day}: ${entry.studentName}`);
-    }
-  }
-
   const hasContent = ctx.events.length > 0
-    || snackStudents.length > 0
     || (ctx.schoolEmails && ctx.schoolEmails.length > 0);
 
   if (!hasContent) {
-    lines.push('', 'No hay eventos ni colaciones programadas.');
+    lines.push('', 'No hay eventos ni avisos programados.');
   }
 
   return lines.join('\n');
-}
-
-interface SnackEntry {
-  readonly day: string;
-  readonly studentName: string;
-}
-
-function resolveSnackStudents(ctx: ReminderContext): SnackEntry[] {
-  const { rotation, students } = ctx;
-  if (rotation.type !== 'snack' || rotation.weeklySlots.length === 0) return [];
-
-  const slots = ctx.reminderType === 'daily'
-    ? rotation.weeklySlots.slice(0, 1)
-    : rotation.weeklySlots;
-
-  const entries: SnackEntry[] = [];
-  let idx = rotation.currentIndex;
-
-  for (const day of slots) {
-    const studentId = rotation.order[idx % rotation.order.length];
-    if (studentId) {
-      entries.push({
-        day,
-        studentName: resolveStudentName(studentId, students),
-      });
-    }
-    idx++;
-  }
-
-  return entries;
 }
 
 function resolveStudentName(

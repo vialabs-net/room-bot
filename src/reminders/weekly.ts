@@ -33,9 +33,8 @@ export async function runWeeklyReminder(
 
   log.info({ from: fromStr, to: toStr }, 'weekly.generating');
 
-  const [events, rotation, students, voiceExamples, schoolEmails] = await Promise.all([
+  const [events, students, voiceExamples, schoolEmails] = await Promise.all([
     store.listEventsByDateRange(fromStr, toStr),
-    store.getRotation(),
     store.listStudents(),
     store.listVoiceExamples(),
     gmailScanner
@@ -49,12 +48,12 @@ export async function runWeeklyReminder(
   const ctx: ReminderContext = {
     reminderType: 'weekly',
     events,
-    rotation,
     students,
     voiceExamples,
     className: config.className,
     schoolName: config.schoolName,
     schoolEmails,
+    weekRange: `${fromStr} al ${toStr}`,
   };
 
   const message = await generateReminder(apiKey, ctx);
