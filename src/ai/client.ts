@@ -4,7 +4,7 @@ import { childLogger } from '../utils/logger.js';
 const log = childLogger('ai-client');
 
 const MODEL = 'claude-sonnet-4-6';
-const MAX_TOKENS = 600;
+const MAX_TOKENS = 1200;
 const MAX_RETRIES = 3;
 
 export async function generateMessage(
