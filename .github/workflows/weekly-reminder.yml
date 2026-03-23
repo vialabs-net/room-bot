@@ -1,0 +1,34 @@
+name: Weekly Reminder
+
+on:
+  schedule:
+    # Every Sunday at 12:00 UTC = 08:00 Chile DST (UTC-4, Oct–Mar)
+    #                            = 09:00 Chile standard (UTC-3, Apr–Sep)
+    - cron: '0 12 * * 0'
+  workflow_dispatch:
+    inputs:
+      workspace_id:
+        description: 'Workspace ID'
+        required: true
+        default: 'pgma'
+
+jobs:
+  send-reminder:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Send weekly reminder
+        env:
+          SERVICE_URL: ${{ secrets.ROOM_BOT_SERVICE_URL }}
+          WORKSPACE_ID: ${{ github.event.inputs.workspace_id || 'pgma' }}
+        run: |
+          response=$(curl -s -w "\n%{http_code}" -X POST "${SERVICE_URL}/remind/generate" \
+            -H "Content-Type: application/json" \
+            -d "{\"type\": \"weekly\", \"workspaceId\": \"${WORKSPACE_ID}\"}")
+          body=$(echo "$response" | head -n -1)
+          status=$(echo "$response" | tail -n 1)
+          echo "Status: $status"
+          echo "Response: $body"
+          if [ "$status" -lt 200 ] || [ "$status" -ge 300 ]; then
+            echo "Request failed with status $status"
+            exit 1
+          fi
