@@ -21,6 +21,10 @@ jobs:
           SERVICE_URL: ${{ secrets.ROOM_BOT_SERVICE_URL }}
           WORKSPACE_ID: ${{ github.event.inputs.workspace_id || 'pgma' }}
         run: |
+          if [ -z "${SERVICE_URL}" ]; then
+            echo "ERROR: ROOM_BOT_SERVICE_URL secret is not set"
+            exit 1
+          fi
           response=$(curl -s -w "\n%{http_code}" -X POST "${SERVICE_URL}/remind/generate" \
             -H "Content-Type: application/json" \
             -d "{\"type\": \"weekly\", \"workspaceId\": \"${WORKSPACE_ID}\"}")
