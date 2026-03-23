@@ -137,8 +137,7 @@ export class WhatsAppClient {
     try {
       await this.authStore.upload();
     } catch (err) {
-      log.error({ err: String(err) }, 'wa.auth.upload.failed');
-      throw err;
+      log.warn({ err: String(err) }, 'wa.auth.upload.failed');
     }
 
     if (this.socket) {
