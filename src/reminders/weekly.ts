@@ -54,6 +54,7 @@ export async function runWeeklyReminder(
     schoolName: config.schoolName,
     schoolEmails,
     weekRange: `${fromStr} al ${toStr}`,
+    today: format(now, 'yyyy-MM-dd'),
   };
 
   const message = await generateReminder(apiKey, ctx);

@@ -11,18 +11,19 @@ export interface ReminderContext {
   readonly schoolName: string;
   readonly schoolEmails?: readonly SchoolEmail[];
   readonly weekRange?: string; // e.g. "2026-03-16 al 2026-03-20"
+  readonly today?: string;    // e.g. "2026-03-23" — to filter out past events
 }
 
 export async function generateReminder(
   apiKey: string,
   ctx: ReminderContext,
 ): Promise<string> {
-  const systemPrompt = buildSystemPrompt(ctx.voiceExamples);
+  const systemPrompt = buildSystemPrompt(ctx.voiceExamples, ctx.today);
   const userPrompt = buildUserPrompt(ctx);
   return generateMessage(apiKey, systemPrompt, userPrompt);
 }
 
-function buildSystemPrompt(voiceExamples: readonly VoiceExample[]): string {
+function buildSystemPrompt(voiceExamples: readonly VoiceExample[], today?: string): string {
   const lines = [
     'Eres una asistente de comunicacion para una mama delegada de sala de clases en Chile.',
     'Tu trabajo es redactar mensajes de WhatsApp para el grupo de apoderados.',
@@ -31,12 +32,17 @@ function buildSystemPrompt(voiceExamples: readonly VoiceExample[]): string {
     '- Escribe en espanol chileno, tono calido y cercano',
     '- Usa emojis con moderacion pero que den vida al mensaje',
     '- Nunca inventes informacion que no este en los datos proporcionados',
+    '- Nunca cambies ni inferras fechas — usa exactamente las fechas que aparecen en los datos',
     '- Si no hay eventos ni avisos del colegio, responde SOLO con la palabra: SKIP',
     '- El mensaje debe ser completo y listo para enviar, sin placeholders',
     '- No incluyas saludos genericos innecesarios, ve al grano con calidez',
     '- Mantente concisa: los papas leen en el celular',
     '- Separa claramente: "Actividades de la semana" (fechas dentro del rango semanal indicado) vs "Mirando mas adelante" (fechas posteriores al rango)',
   ];
+
+  if (today) {
+    lines.push(`- La fecha de hoy es ${today}. No incluyas eventos que ya ocurrieron (fechas anteriores a hoy).`);
+  }
 
   if (voiceExamples.length > 0) {
     lines.push('', 'Ejemplos del estilo de escritura que debes imitar:');
