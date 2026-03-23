@@ -21,13 +21,30 @@ jobs:
           SERVICE_URL: ${{ secrets.ROOM_BOT_SERVICE_URL }}
           WORKSPACE_ID: ${{ github.event.inputs.workspace_id || 'pgma' }}
         run: |
+          # Trim whitespace/newlines from secret value
+          SERVICE_URL="${SERVICE_URL// /}"
+          SERVICE_URL="${SERVICE_URL%$'\n'}"
+          SERVICE_URL="${SERVICE_URL%$'\r'}"
+
           if [ -z "${SERVICE_URL}" ]; then
             echo "ERROR: ROOM_BOT_SERVICE_URL secret is not set"
             exit 1
           fi
+
+          echo "Calling: ${SERVICE_URL}/remind/generate"
+
+          set +e
           response=$(curl -s -w "\n%{http_code}" -X POST "${SERVICE_URL}/remind/generate" \
             -H "Content-Type: application/json" \
-            -d "{\"type\": \"weekly\", \"workspaceId\": \"${WORKSPACE_ID}\"}")
+            -d "{\"type\": \"weekly\", \"workspaceId\": \"${WORKSPACE_ID}\"}" 2>&1)
+          curl_exit=$?
+          set -e
+
+          if [ $curl_exit -ne 0 ]; then
+            echo "curl failed (exit ${curl_exit}): ${response}"
+            exit 1
+          fi
+
           body=$(echo "$response" | head -n -1)
           status=$(echo "$response" | tail -n 1)
           echo "Status: $status"
