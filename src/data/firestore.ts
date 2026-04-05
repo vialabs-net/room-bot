@@ -227,6 +227,67 @@ export class WorkspaceStore {
     await this.col('events').doc(id).update({ status });
   }
 
+  async deleteEvent(id: string): Promise<void> {
+    const doc = await this.col('events').doc(id).get();
+    if (!doc.exists) throw new Error('Event not found');
+    const status = doc.data()!['status'] as EventStatus;
+    if (status !== 'draft') throw new Error('Only draft events can be deleted');
+    await this.col('events').doc(id).delete();
+  }
+
+  async addItemsToAssignedEvent(eventId: string, newItems: { name: string }[]): Promise<ClassEvent> {
+    if (newItems.length === 0) throw new Error('No items provided');
+
+    const rotRef = this.db.doc(`workspaces/${this.workspaceId}/rotation/config`);
+    const eventRef = this.col('events').doc(eventId);
+
+    return this.db.runTransaction(async (tx) => {
+      const [rotDoc, eventDoc] = await Promise.all([tx.get(rotRef), tx.get(eventRef)]);
+      if (!rotDoc.exists) throw new Error('Rotation config not found');
+      if (!eventDoc.exists) throw new Error('Event not found');
+
+      const rot = rotDoc.data()!;
+      const event = eventDoc.data()!;
+      const existingItems = (event['items'] as EventItem[]) ?? [];
+
+      const order = rot['order'] as string[];
+      const deferred = [...((rot['deferred'] as string[] | undefined) ?? [])];
+      let currentIndex = rot['currentIndex'] as number;
+
+      const assigned: EventItem[] = [];
+      const usedFromDeferred: string[] = [];
+
+      for (const item of newItems) {
+        let studentId: string;
+        if (deferred.length > 0) {
+          studentId = deferred.shift()!;
+          usedFromDeferred.push(studentId);
+        } else {
+          studentId = order[currentIndex % order.length]!;
+          currentIndex = (currentIndex + 1) % order.length;
+        }
+        assigned.push({ name: item.name, assignedTo: studentId });
+      }
+
+      const updatedItems = [...existingItems, ...assigned];
+
+      tx.update(rotRef, {
+        currentIndex,
+        deferred: deferred.filter((d) => !usedFromDeferred.includes(d)),
+      });
+      tx.update(eventRef, { items: updatedItems });
+
+      return {
+        id: eventId,
+        date: event['date'] as string,
+        description: event['description'] as string,
+        type: event['type'] as EventType,
+        items: updatedItems,
+        status: event['status'] as EventStatus,
+      };
+    });
+  }
+
   // --- Drafts ---
 
   async createDraft(message: string, reminderType: ReminderType): Promise<string> {
