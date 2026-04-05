@@ -43,6 +43,25 @@ export function renderAdminPage(data: AdminData): string {
           ? `<button class="btn btn-primary" onclick="doAssign('${esc(e.id)}')">Asignar estudiantes</button>`
           : '';
 
+        const deleteBtn = e.status === 'draft'
+          ? `<button class="btn btn-danger" onclick="doDelete('${esc(e.id)}')">Eliminar</button>`
+          : '';
+
+        const addItemsBtn = e.status === 'assigned'
+          ? `<button class="btn btn-secondary" onclick="toggleAddItems('${esc(e.id)}')">+ Agregar items</button>
+             <div id="add-items-${esc(e.id)}" class="add-items-form" style="display:none">
+               <div id="new-items-${esc(e.id)}" class="items-builder">
+                 <div class="item-input">
+                   <input type="text" placeholder="Ej: Jugo, Galletas..." class="new-item-field">
+                   <button class="btn-sm btn-remove-item" onclick="removeNewItem(this)">X</button>
+                 </div>
+               </div>
+               <button class="btn-sm btn-add-item" onclick="addNewItem('${esc(e.id)}')" style="margin-top:4px">+ Agregar item</button>
+               <br>
+               <button class="btn btn-primary" onclick="doAddItems('${esc(e.id)}')" style="margin-top:8px">Guardar y asignar</button>
+             </div>`
+          : '';
+
         return `<div class="event-card" id="event-${esc(e.id)}">
           <div class="event-header">
             <span class="event-date">${esc(e.date)}</span>
@@ -52,6 +71,8 @@ export function renderAdminPage(data: AdminData): string {
           <p class="event-desc">${esc(e.description)}</p>
           <ul class="item-list">${itemRows}</ul>
           ${assignBtn}
+          ${addItemsBtn}
+          ${deleteBtn}
           <div id="msg-${esc(e.id)}" class="msg"></div>
         </div>`;
       }).join('\n');
@@ -206,6 +227,11 @@ export function renderAdminPage(data: AdminData): string {
     }
     .btn-add-item { background: #e0e0e0; color: #333; }
     .btn-remove-item { background: #ffcdd2; color: #c62828; min-width: 32px; }
+    .btn-danger { background: #f44336; color: white; margin-top: 8px; }
+    .btn-danger:hover { background: #d32f2f; }
+    .btn-secondary { background: #e0e0e0; color: #333; margin-top: 8px; }
+    .btn-secondary:hover { background: #bdbdbd; }
+    .add-items-form { margin-top: 10px; padding: 10px; background: #f9f9f9; border-radius: 6px; border: 1px solid #e0e0e0; }
   </style>
 </head>
 <body>
@@ -261,11 +287,12 @@ export function renderAdminPage(data: AdminData): string {
     const W = '${esc(workspaceId)}';
     const T = '${esc(token)}';
 
-    async function api(path, body) {
+    async function api(path, body, method) {
+      const m = method || 'POST';
       const res = await fetch(path + '?token=' + T, {
-        method: 'POST',
+        method: m,
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
+        body: m === 'DELETE' ? undefined : JSON.stringify(body),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Error');
@@ -322,6 +349,55 @@ export function renderAdminPage(data: AdminData): string {
       if (container.children.length > 1) {
         btn.parentElement.remove();
       }
+    }
+
+    async function doDelete(eventId) {
+      if (!confirm('Eliminar este evento? Esta accion no se puede deshacer.')) return;
+      try {
+        await api('/admin/' + W + '/event/' + eventId, {}, 'DELETE');
+        showMsg('msg-' + eventId, true, 'Evento eliminado. Recargando...');
+        setTimeout(() => location.reload(), 1500);
+      } catch (err) { showMsg('msg-' + eventId, false, err.message); }
+    }
+
+    function toggleAddItems(eventId) {
+      const form = document.getElementById('add-items-' + eventId);
+      if (!form) return;
+      form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    }
+
+    function addNewItem(eventId) {
+      const container = document.getElementById('new-items-' + eventId);
+      if (!container) return;
+      const div = document.createElement('div');
+      div.className = 'item-input';
+      div.innerHTML = '<input type="text" placeholder="Ej: Jugo, Galletas..." class="new-item-field">'
+        + '<button class="btn-sm btn-remove-item" onclick="removeNewItem(this)">X</button>';
+      container.appendChild(div);
+    }
+
+    function removeNewItem(btn) {
+      const container = btn.parentElement.parentElement;
+      if (container.children.length > 1) {
+        btn.parentElement.remove();
+      }
+    }
+
+    async function doAddItems(eventId) {
+      const container = document.getElementById('new-items-' + eventId);
+      if (!container) return;
+      const fields = container.querySelectorAll('.new-item-field');
+      const items = [];
+      fields.forEach(function(f) {
+        const val = f.value.trim();
+        if (val) items.push({ name: val });
+      });
+      if (items.length === 0) { showMsg('msg-' + eventId, false, 'Agrega al menos un item'); return; }
+      try {
+        await api('/admin/' + W + '/event/' + eventId + '/items', { items });
+        showMsg('msg-' + eventId, true, 'Items agregados y asignados. Recargando...');
+        setTimeout(() => location.reload(), 1500);
+      } catch (err) { showMsg('msg-' + eventId, false, err.message); }
     }
 
     async function doAddEvent() {

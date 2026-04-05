@@ -246,6 +246,51 @@ export function createRoutes(env: AppEnv): Hono {
     }
   });
 
+  app.delete('/admin/:workspaceId/event/:eventId', async (c) => {
+    const token = c.req.query('token') ?? '';
+    if (token !== env.adminToken) {
+      return c.json({ error: 'No autorizado' }, 401);
+    }
+
+    const workspaceId = c.req.param('workspaceId');
+    const eventId = c.req.param('eventId');
+    const store = new WorkspaceStore(env.db, workspaceId);
+
+    try {
+      await store.deleteEvent(eventId);
+      log.info({ eventId, workspaceId }, 'admin.event.deleted');
+      return c.json({ status: 'deleted' });
+    } catch (err) {
+      log.error({ err: String(err), eventId }, 'admin.event.delete.failed');
+      return c.json({ error: String(err) }, 400);
+    }
+  });
+
+  app.post('/admin/:workspaceId/event/:eventId/items', async (c) => {
+    const token = c.req.query('token') ?? '';
+    if (token !== env.adminToken) {
+      return c.json({ error: 'No autorizado' }, 401);
+    }
+
+    const workspaceId = c.req.param('workspaceId');
+    const eventId = c.req.param('eventId');
+    const body = await c.req.json() as { items?: { name: string }[] };
+
+    if (!body.items || body.items.length === 0) {
+      return c.json({ error: 'items is required and must not be empty' }, 400);
+    }
+
+    const store = new WorkspaceStore(env.db, workspaceId);
+    try {
+      const event = await store.addItemsToAssignedEvent(eventId, body.items);
+      log.info({ eventId, workspaceId, added: body.items.length }, 'admin.event.items.added');
+      return c.json({ status: 'items_added', event });
+    } catch (err) {
+      log.error({ err: String(err), eventId }, 'admin.event.items.add.failed');
+      return c.json({ error: String(err) }, 400);
+    }
+  });
+
   app.post('/admin/:workspaceId/event/:eventId/assign', async (c) => {
     const token = c.req.query('token') ?? '';
     if (token !== env.adminToken) {
