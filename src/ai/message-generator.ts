@@ -37,6 +37,7 @@ function buildSystemPrompt(voiceExamples: readonly VoiceExample[], today?: strin
     '- El mensaje debe ser completo y listo para enviar, sin placeholders',
     '- No incluyas saludos genericos innecesarios, ve al grano con calidez',
     '- Mantente concisa: los papas leen en el celular',
+    '- Si un evento tiene items asignados a estudiantes, SIEMPRE lista cada item y el nombre del estudiante asignado — los apoderados necesitan saber exactamente que les toca traer a sus hijos.',
     '- Separa claramente: "Actividades de la semana" (fechas dentro del rango semanal indicado) vs "Mirando mas adelante" (fechas posteriores al rango)',
   ];
 
