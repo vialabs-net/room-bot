@@ -1,4 +1,4 @@
-import { addDays, format, startOfWeek } from 'date-fns';
+import { addDays, format, nextMonday } from 'date-fns';
 import { toZonedTime } from 'date-fns-tz';
 import type { ReminderContext } from '../ai/message-generator.js';
 import { generateReminder } from '../ai/message-generator.js';
@@ -26,10 +26,10 @@ export async function runWeeklyReminder(
   const tz = config.timezone;
 
   const now = toZonedTime(new Date(), tz);
-  const monday = startOfWeek(addDays(now, 1), { weekStartsOn: 1 });
-  const friday = addDays(monday, 4);
+  const monday = nextMonday(now);
+  const sunday = addDays(monday, 6);
   const fromStr = format(monday, 'yyyy-MM-dd');
-  const toStr = format(friday, 'yyyy-MM-dd');
+  const toStr = format(sunday, 'yyyy-MM-dd');
 
   log.info({ from: fromStr, to: toStr }, 'weekly.generating');
 
